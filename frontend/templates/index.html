@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Research Intelligence</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Hamburger -->
+    <button class="hamburger" id="hamburgerBtn">
+      <div class="hamburger-icon">
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+      </div>
+    </button>
+
+    <!-- Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon"></div>
+          Research Intelligence
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" data-page="home">
+          <div class="nav-icon">🏠</div>
+          Home
+        </a>
+        <a href="#" class="nav-item" data-page="dashboard">
+          <div class="nav-icon">
+            <img src="{{ url_for('static', filename='img/dashboard.png') }}" alt="Dashboard" style="width: 24px; height: 24px;">
+          </div>
+          Dashboard
+        </a>
+        <a href="#" class="nav-item" data-page="upload">
+          <div class="nav-icon">
+            <img src="{{ url_for('static', filename='img/upload.png') }}" alt="Upload" style="width: 24px; height: 24px;">
+          </div>
+          Upload
+        </a>
+        <a href="#" class="nav-item" data-page="analisis">
+          <div class="nav-icon">
+            <img src="{{ url_for('static', filename='img/analisis.png') }}" alt="Analisis" style="width: 24px; height: 24px;">
+          </div>
+          Analisis Jurnal/Paper
+        </a>
+        <a href="#" class="nav-item back-item" data-page="home">
+          <div class="nav-icon">&larr;</div>
+          Back
+        </a>
+      </nav>
+    </div>
+
+    <!-- Main Area -->
+    <div class="main-area" id="mainArea">
+
+      <!-- Home Page -->
+      <section class="main-content" id="homePage">
+        <div class="home-background">
+          <div class="overlay-image"></div>
+          <div class="overlay-color"></div>
+        </div>
+
+        <div class="content-wrapper">
+          <h1 class="main-title">Research Intelligence</h1>
+          <p class="subtitle">
+            Proses sistematis untuk mengumpulkan, menganalisis, dan
+            menginterpretasikan informasi dan data yang relevan dengan kegiatan penelitian
+          </p>
+          <button class="cta-button" onclick="handleGetStarted()">Get Started</button>
+        </div>
+      </section>
+
+
+      <!-- Dashboard Page -->
+      <section id="dashboardPage" style="display: none;">
+        <div class="dashboard-container">
+          <div class="dashboard-header">
+            <h2>Dashboard Analytics</h2>
+          </div>
+
+          <div class="stats-cards">
+            <div class="card1">
+              <h3>150</h3>
+              <p>Total Documents</p>
+            </div>
+            <div class="card2">
+              <h3>23</h3>
+              <p>Active Projects</p>
+            </div>
+            <div class="card3">
+              <h3>89%</h3>
+              <p>Success Rate</p>
+            </div>
+          </div>
+
+          <div class="charts-section">
+            <div class="bar-chart">
+              <h3>Document Analysis Trends</h3>
+              <div class="bar-chart-container">
+                <div class="bars">
+                  <div style="height: 60%; background: #FF6B6B; width: 30px;"></div>
+                  <div style="height: 80%; background: #FF9999; width: 30px;"></div>
+                  <div style="height: 45%; background: #FFCCCC; width: 30px;"></div>
+                  <div style="height: 90%; background: #FF6B6B; width: 30px;"></div>
+                  <div style="height: 70%; background: #FF9999; width: 30px;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="donut-chart">
+              <h4>Analysis Distribution</h4>
+              <div class="circle">
+                <div class="inner-circle">
+                  <span>Total</span>
+                  <span>100%</span>
+                </div>
+              </div>
+              <div class="label">BERTopic: 60%</div>
+              <div class="label">Keywords: 25%</div>
+              <div class="label">Others: 15%</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upload Page -->
+      <section class="upload-wrapper" id="uploadPage" style="display: none;">
+        <div class="upload-card">
+          <h2 class="upload-title">Upload File</h2>
+          <div class="dropzone" id="dropzone">
+            <div class="file-icon">📄</div>
+            <p>Drop file here</p>
+            <input type="file" id="fileInput" accept=".csv,.xlsx" style="display:none;" />
+            <button class="upload-btn" id="uploadBtn">Upload File</button>
+            <p class="upload-info">Silakan unggah dokumen (CSV dan XLSX)</p>
+          </div>
+
+          <table class="file-table">
+            <thead>
+              <tr>
+                <th>Nama File</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="fileTableBody">
+              <!-- File rows injected here -->
+            </tbody>
+          </table>
+
+          <div class="dropdown-container">
+            <select class="dropdown" id="metodeAnalisis">
+              <option selected disabled>Pilih Metode Analisis</option>
+              <option value="bertopic">BERTopic</option>
+              <option value="keyword">Matching Keyword</option>
+            </select>
+          </div>
+
+          <button class="analyze-btn" id="runAnalysisBtn">Mulai Analisis</button>
+        </div>
+      </section>
+
+      <!-- Analisis Page -->
+      <section id="analisisPage" class="analisis-slide" style="display: none; padding:40px 20px;">
+        <div class="card">
+          <h2 class="center-text">Analisis Jurnal/Paper</h2>
+
+          <div id="analisisDefault" class="analisis-slide active">
+            <p class="center-text">Silakan pilih metode analisis terlebih dahulu di menu Upload.</p>
+          </div>
+          <div id="analisisBertopic" class="analisis-slide">
+            <h3>Hasil Analisis BERTopic</h3>
+
+            <!-- Plot akan dimasukkan di sini oleh JavaScript -->
+            <div id="hasilBertopic" class="plot-container">
+              <p class="placeholder">Belum ada hasil analisis.</p>
+            </div>
+
+            <!-- Parameter terbaik juga akan disisipkan secara dinamis -->
+            <div id="parameterTerbaik" class="parameter-box">
+              <p class="placeholder">Belum ada parameter ditemukan.</p>
+            </div>
+          </div>
+
+
+          <div id="analisisKeyword" class="analisis-slide">
+            <h3>Hasil Analisis Matching Keyword</h3>
+            <div id="hasilKeyword"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script>
+  document.getElementById('uploadBtn').addEventListener('click', function () {
+    const btn = this;
+    if (btn.disabled) return; // Cegah klik ganda
+
+    btn.disabled = true; // Disable tombol
+    btn.textContent = 'Uploading...'; // Opsional: ubah teks tombol
+
+    // Simulasi proses upload
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput.files.length === 0) {
+      alert('Silakan pilih file terlebih dahulu.');
+      btn.disabled = false;
+      btn.textContent = 'Upload'; // Kembalikan teks
+      return;
+    }
+
+    // Lanjutkan proses upload (misalnya AJAX atau Form Submit)
+    // Setelah selesai:
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = 'Upload'; // Kembalikan teks
+    }, 3000); // Simulasi delay 3 detik
+  });
+  </script>
+
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
