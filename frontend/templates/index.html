@@ -191,6 +191,30 @@
             <div id="parameterTerbaik" class="parameter-box">
               <p class="placeholder">Belum ada parameter ditemukan.</p>
             </div>
+
+            <!-- Section untuk memilih cluster size dan generate topics -->
+            <div id="pilihClusterSize" style="margin-top: 20px; display: none;">
+              <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <h4 style="margin-bottom: 15px; color: #333;">Generate Topics with Labels</h4>
+                
+                <div style="margin-bottom: 15px;">
+                  <label for="minClusterInput" style="display: block; font-weight: bold; margin-bottom: 5px;">
+                    Pilih Min Cluster Size:
+                  </label>
+                  <select id="minClusterInput" style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+                    <option value="" disabled selected>Pilih min cluster size</option>
+                  </select>
+                </div>
+
+                <button onclick="generateTopikDenganLabel()" 
+                        style="background: #2E8B57; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                  Generate Topics & Labels
+                </button>
+              </div>
+            </div>
+
+            <!-- Hasil topik dengan label -->
+            <div id="hasilTopik" style="margin-top: 20px;"></div>
           </div>
 
 

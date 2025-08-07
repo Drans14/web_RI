@@ -433,11 +433,143 @@ function setInnerHTMLWithScripts(el, html) {
   });
 }
 
-// Fungsi utama untuk menjalankan analisis BERTopic
+// ===================
+// Updated functions for topic generation
+// ===================
+
+function generateTopikDenganLabel() {
+  const minClusterSizeSelect = document.getElementById("minClusterInput");
+  const topicResultDiv = document.getElementById("hasilTopik");
+  const minCluster = parseInt(minClusterSizeSelect.value);
+  
+  // Gunakan currentFilename yang sudah disimpan saat analisis BERTopic
+  if (!currentFilename) {
+    alert("File belum diupload atau analisis BERTopic belum dijalankan.");
+    return;
+  }
+
+  if (!minCluster || isNaN(minCluster)) {
+    alert("Pilih nilai min_cluster_size yang valid.");
+    return;
+  }
+
+  // Show loading with spinner
+  topicResultDiv.innerHTML = `
+    <div style="text-align:center;padding:20px;">
+      <p>Generating topics and labels...</p>
+      <div class="spinner"></div>
+    </div>
+  `;
+
+  fetch("/generate_topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: currentFilename,
+      min_cluster_size: minCluster
+    }),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      if (data.error) {
+        topicResultDiv.innerHTML = `
+          <div style="color:red;padding:10px;border:1px solid red;border-radius:5px;">
+            <strong>Error:</strong> ${data.error}
+          </div>
+        `;
+        return;
+      }
+
+      // Tampilkan hasil dengan styling yang sesuai dengan CSS
+      let html = `<p><strong>Total Topics:</strong> ${data.topic_count}</p>`;
+      
+      if (data.topics && data.topics.length > 0) {
+        html += `
+          <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+            <thead>
+              <tr>
+                <th style="background-color:#4CAF50; color:white; padding:10px; text-align:left;">Topic ID</th>
+                <th style="background-color:#4CAF50; color:white; padding:10px; text-align:left;">Label</th>
+                <th style="background-color:#4CAF50; color:white; padding:10px; text-align:left;">Document Count</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        data.topics.forEach((item) => {
+          html += `
+            <tr style="border-bottom:1px solid #ddd;">
+              <td style="padding:10px;">${item.topic}</td>
+              <td style="padding:10px; font-weight:bold;">${item.label || `Topic ${item.topic}`}</td>
+              <td style="padding:10px;">${item.count || 'N/A'}</td>
+            </tr>
+          `;
+        });
+        
+        html += `
+            </tbody>
+          </table>
+        `;
+      } else {
+        html += `<p style="color:orange;">No topics generated.</p>`;
+      }
+      
+      topicResultDiv.innerHTML = html;
+    })
+    .catch((error) => {
+      console.error("Gagal generate topic:", error);
+      topicResultDiv.innerHTML = `
+        <div style="color:red;padding:10px;border:1px solid red;border-radius:5px;">
+          <strong>Error:</strong> ${error.message || 'Gagal mengambil data topik.'}
+        </div>
+      `;
+    });
+}
+
+// Function to populate dropdown with cluster options
+function populateClusterDropdown(options) {
+  const dropdown = document.getElementById("minClusterInput");
+  if (!dropdown || !options || options.length === 0) {
+    console.warn("No cluster options to populate or dropdown not found");
+    return;
+  }
+
+  // Clear existing options
+  dropdown.innerHTML = '';
+  
+  // Add default option
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Pilih min_cluster_size';
+  defaultOption.disabled = true;
+  defaultOption.selected = true;
+  dropdown.appendChild(defaultOption);
+  
+  // Add options from analysis results
+  options.forEach(option => {
+    const optionElement = document.createElement('option');
+    optionElement.value = option;
+    optionElement.textContent = option;
+    dropdown.appendChild(optionElement);
+  });
+  
+  console.log(`Populated dropdown with ${options.length} options:`, options);
+}
+
+// Updated BERTopic analysis function
 function jalankanAnalisisBertopic(namaFile) {
   const hasilDiv = document.getElementById("hasilBertopic");
   const paramDiv = document.getElementById("parameterTerbaik");
   const containerDiv = document.getElementById("analisisBertopic");
+  const clusterSizeSection = document.getElementById("pilihClusterSize");
+
+  // Store filename for later use
+  currentFilename = namaFile;
 
   // Tampilkan loading
   hasilDiv.innerHTML = `
@@ -455,16 +587,16 @@ function jalankanAnalisisBertopic(namaFile) {
     .then((response) => response.json())
     .then((data) => {
       if (data.error) {
-        hasilDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+        hasilDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
         return;
       }
 
       console.log("Received data:", data);
 
-      // METODE SEDERHANA: Langsung masukkan HTML tanpa parsing kompleks
+      // Display plot
       hasilDiv.innerHTML = data.plot_html;
 
-      // Cari semua script di dalam HTML yang baru dimasukkan
+      // Execute scripts in the plot HTML
       const scripts = hasilDiv.querySelectorAll('script');
       console.log("Found scripts:", scripts.length);
 
@@ -487,14 +619,30 @@ function jalankanAnalisisBertopic(namaFile) {
       // Tampilkan parameter
       if (data.best_params) {
         paramDiv.innerHTML = `
-          <p><strong>min_cluster_size terbaik:</strong> ${data.best_params.min_cluster_size}</p>
-          <p><strong>Coherence Score:</strong> ${parseFloat(data.best_params.coherence_score).toFixed(4)}</p>
+          <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin:15px 0;">
+            <p><strong>Parameter Terbaik:</strong></p>
+            <p><strong>min_cluster_size:</strong> ${data.best_params.min_cluster_size}</p>
+            <p><strong>Coherence Score:</strong> ${parseFloat(data.best_params.coherence_score).toFixed(4)}</p>
+          </div>
         `;
+      }
+
+      // Populate cluster dropdown with options from analysis
+      if (data.cluster_options && data.cluster_options.length > 0) {
+        clusterOptions = data.cluster_options;
+        populateClusterDropdown(clusterOptions);
+        
+        // Show cluster selection section
+        if (clusterSizeSection) {
+          clusterSizeSection.style.display = 'block';
+        }
+      } else {
+        console.warn("No cluster options received from server");
       }
 
       containerDiv.classList.add("active");
 
-      // Debug check setelah 2 detik
+      // Debug check after 2 seconds
       setTimeout(() => {
         const plotDivs = hasilDiv.querySelectorAll('.plotly-graph-div');
         console.log("Plot divs found:", plotDivs.length);
@@ -510,9 +658,12 @@ function jalankanAnalisisBertopic(namaFile) {
     })
     .catch((error) => {
       console.error("Error:", error);
-      hasilDiv.innerHTML = `<p>Terjadi kesalahan: ${error.message}</p>`;
+      hasilDiv.innerHTML = `<p style="color:red;">Terjadi kesalahan: ${error.message}</p>`;
     });
 }
+
+// Make function available globally
+window.generateTopikDenganLabel = generateTopikDenganLabel;
 
 function jalankanAnalisisKeyword(namaFile) {
   const hasilDiv = document.getElementById("hasilKeyword");
@@ -616,4 +767,6 @@ document.addEventListener("DOMContentLoaded", function() {
   
   // Initialize default analysis slide
   showAnalisisSlide('default');
+
+
 });

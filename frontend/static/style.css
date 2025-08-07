@@ -800,3 +800,52 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* Gaya untuk hasil topik dan label */
+#hasilTopik {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #fdfdfd;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Judul Total Topics */
+#hasilTopik p strong {
+  font-size: 18px;
+  color: #2c3e50;
+}
+
+/* Tabel Topik */
+#hasilTopik table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 15px;
+}
+
+/* Header Tabel */
+#hasilTopik th {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px;
+  text-align: left;
+}
+
+/* Baris Tabel */
+#hasilTopik td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Hover efek baris */
+#hasilTopik tr:hover {
+  background-color: #f1f1f1;
+}
+
+/* Alternating row colors */
+#hasilTopik tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
