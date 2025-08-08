@@ -16,28 +16,13 @@ from gensim.models.coherencemodel import CoherenceModel
 from gensim.corpora.dictionary import Dictionary
 from bertopic.representation import KeyBERTInspired
 import joblib
+import requests
+import json
 from .preprocessing import preprocess_dataframe,simple_tokenizer
-
-
-import pandas as pd
-import numpy as np
-import joblib
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-from gensim.corpora import Dictionary
-from gensim.models import CoherenceModel
-from hdbscan import HDBSCAN
-from bertopic import BERTopic
-from bertopic.representation import KeyBERTInspired
-import plotly.express as px
-import plotly.io as pio
-import os
-from sentence_transformers import SentenceTransformer
 import torch
-from joblib import Parallel, delayed
-from .preprocessing import preprocess_dataframe, simple_tokenizer
+import plotly.io as pio
+import plotly.express as px
+
 
 def bertopic_analysis(df):
     try:
@@ -70,7 +55,7 @@ def bertopic_analysis(df):
 
         # Step 6: Tentukan range min_cluster_size berdasarkan jumlah dokumen
         if n_docs < 500:
-            min_cluster_range = range(12, 18)
+            min_cluster_range = range(4, 18)
         elif n_docs < 1000:
             min_cluster_range = range(8, 25)
         elif n_docs < 1500:
@@ -111,9 +96,7 @@ def bertopic_analysis(df):
                     hdbscan_model=hdbscan_model,
                     vectorizer_model=vectorizer_model,
                     ctfidf_model=ctfidf_model,
-                    representation_model=representation_model,
-                    verbose=False,
-                    calculate_probabilities=False
+                    verbose=False
                 )
                 topic_model.fit(docs, embeddings)
                 topic_words = []
@@ -131,7 +114,7 @@ def bertopic_analysis(df):
                         dictionary=dictionary,
                         coherence='c_v',
                         processes=1,
-                        topn=10
+                        topn=15
                     )
                     coherence = coherence_model.get_coherence()
                     return (min_cluster, coherence, topic_model)
@@ -150,9 +133,13 @@ def bertopic_analysis(df):
         best_size = None
         best_model = None
 
+        # Simpan opsi cluster yang valid untuk dropdown
+        valid_clusters = []
+        
         for min_cluster, coherence, model in results:
             if not np.isnan(coherence):
                 print(f"min_cluster_size = {min_cluster} → Coherence = {coherence:.4f}")
+                valid_clusters.append(min_cluster)
                 if coherence > best_score:
                     best_score = coherence
                     best_size = min_cluster
@@ -197,12 +184,25 @@ def bertopic_analysis(df):
 
             plot_html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn', div_id="coherence-plot")
 
+        # Siapkan data untuk cache (untuk generate topics nanti)
+        cache_data = {
+            "docs": docs,
+            "embeddings": embeddings,
+            "embedding_model": embedding_model,
+            "umap_model": umap_model,
+            "vectorizer_model": vectorizer_model,
+            "ctfidf_model": ctfidf_model,
+            "representation_model": representation_model,
+        }
+
         return {
             "plot_html": plot_html,
             "best_params": {
                 "min_cluster_size": best_size,
                 "coherence_score": best_score
-            }
+            },
+            "cluster_options": sorted(valid_clusters),  # Kirim opsi cluster yang valid
+            "cache_data": cache_data  # Data untuk di-cache
         }
 
     except Exception as e:
@@ -212,3 +212,113 @@ def bertopic_analysis(df):
             "traceback": traceback.format_exc(),
             "plot_html": None
         }
+
+    
+def generate_topics_with_label(
+    docs,
+    embeddings,
+    embedding_model,
+    umap_model,
+    vectorizer_model,
+    ctfidf_model,
+    representation_model,
+    min_cluster_size
+):
+    try:
+        print(f"Generating topics with min_cluster_size: {min_cluster_size}")
+        
+        # Buat model HDBSCAN baru dengan parameter yang dipilih user
+        hdbscan_model = HDBSCAN(
+            min_cluster_size=min_cluster_size,
+            metric='euclidean',
+            cluster_selection_method='eom',
+            prediction_data=True
+        )
+
+        # Buat model BERTopic dengan semua komponen yang sudah ada
+        topic_model = BERTopic(
+            embedding_model=embedding_model,
+            umap_model=umap_model,
+            hdbscan_model=hdbscan_model,
+            vectorizer_model=vectorizer_model,
+            ctfidf_model=ctfidf_model,
+            representation_model=representation_model,
+            calculate_probabilities=True,
+            verbose=True
+        )
+
+        print("Fitting topic model...")
+        topics, probs = topic_model.fit_transform(docs, embeddings)
+        
+        print("Reducing outliers...")
+        new_topics = topic_model.reduce_outliers(docs, topics, strategy="distributions")
+        topic_model.update_topics(docs, topics=new_topics, vectorizer_model=vectorizer_model)
+
+        print("Getting topic info...")
+        topic_info = topic_model.get_topic_info()
+        
+        # Generate labels menggunakan Groq API
+        print("Generating labels with Groq API...")
+        auto_labels = generate_labels_with_groq(topic_info)
+
+        # Update topic info dengan labels
+        for topic_id, label in auto_labels.items():
+            topic_info.loc[topic_info['Topic'] == topic_id, 'Name'] = label
+
+        return topic_model, topic_info
+
+    except Exception as e:
+        import traceback
+        print("Error in generate_topics_with_label:")
+        print(traceback.format_exc())
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+def generate_labels_with_groq(topic_info):
+    """Generate labels untuk setiap topik menggunakan Groq API"""
+    auto_labels = {}
+    api_key = "masukan_api_key_di_sini"  # Ganti dengan API key Groq Anda
+    base_url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    for _, row in topic_info.iterrows():
+        topic_id = row["Topic"]
+        if topic_id == -1:
+            continue  # Skip outlier topics
+
+        words = row["Representation"]
+        prompt = f"""Generate a short and clear topic label (maximum 5 words) based on the following keywords:
+{words}
+The label must:
+- Be in English
+- Accurately represent the core meaning of the keywords
+- Be concise and descriptive
+- Return only the label text (no explanations)"""
+
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens": 20
+        }
+
+        try:
+            response = requests.post(base_url, headers=headers, json=payload, timeout=10)
+            if response.status_code == 200:
+                label = response.json()['choices'][0]['message']['content'].strip()
+                auto_labels[topic_id] = label
+                print(f"Topic {topic_id}: {label}")
+            else:
+                print(f"API Error for topic {topic_id}: {response.status_code}")
+                auto_labels[topic_id] = f"Topic {topic_id}"
+        except Exception as e:
+            print(f"Error generating label for topic {topic_id}: {str(e)}")
+            auto_labels[topic_id] = f"Topic {topic_id}"
+
+    return auto_labels

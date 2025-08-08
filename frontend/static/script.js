@@ -433,11 +433,143 @@ function setInnerHTMLWithScripts(el, html) {
   });
 }
 
-// Fungsi utama untuk menjalankan analisis BERTopic
+// ===================
+// Updated functions for topic generation
+// ===================
+
+function generateTopikDenganLabel() {
+  const minClusterSizeSelect = document.getElementById("minClusterInput");
+  const topicResultDiv = document.getElementById("hasilTopik");
+  const minCluster = parseInt(minClusterSizeSelect.value);
+  
+  // Gunakan currentFilename yang sudah disimpan saat analisis BERTopic
+  if (!currentFilename) {
+    alert("File belum diupload atau analisis BERTopic belum dijalankan.");
+    return;
+  }
+
+  if (!minCluster || isNaN(minCluster)) {
+    alert("Pilih nilai min_cluster_size yang valid.");
+    return;
+  }
+
+  // Show loading with spinner
+  topicResultDiv.innerHTML = `
+    <div style="text-align:center;padding:20px;">
+      <p>Generating topics and labels...</p>
+      <div class="spinner"></div>
+    </div>
+  `;
+
+  fetch("/generate_topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: currentFilename,
+      min_cluster_size: minCluster
+    }),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      if (data.error) {
+        topicResultDiv.innerHTML = `
+          <div style="color:red;padding:10px;border:1px solid red;border-radius:5px;">
+            <strong>Error:</strong> ${data.error}
+          </div>
+        `;
+        return;
+      }
+
+      // Tampilkan hasil dengan styling yang sesuai dengan CSS
+      let html = `<p><strong>Total Topics:</strong> ${data.topic_count}</p>`;
+      
+      if (data.topics && data.topics.length > 0) {
+        html += `
+          <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+            <thead>
+              <tr>
+                <th style="background-color:#4CAF50; color:white; padding:10px; text-align:left;">Topic ID</th>
+                <th style="background-color:#4CAF50; color:white; padding:10px; text-align:left;">Label</th>
+                <th style="background-color:#4CAF50; color:white; padding:10px; text-align:left;">Document Count</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        data.topics.forEach((item) => {
+          html += `
+            <tr style="border-bottom:1px solid #ddd;">
+              <td style="padding:10px;">${item.topic}</td>
+              <td style="padding:10px; font-weight:bold;">${item.label || `Topic ${item.topic}`}</td>
+              <td style="padding:10px;">${item.count || 'N/A'}</td>
+            </tr>
+          `;
+        });
+        
+        html += `
+            </tbody>
+          </table>
+        `;
+      } else {
+        html += `<p style="color:orange;">No topics generated.</p>`;
+      }
+      
+      topicResultDiv.innerHTML = html;
+    })
+    .catch((error) => {
+      console.error("Gagal generate topic:", error);
+      topicResultDiv.innerHTML = `
+        <div style="color:red;padding:10px;border:1px solid red;border-radius:5px;">
+          <strong>Error:</strong> ${error.message || 'Gagal mengambil data topik.'}
+        </div>
+      `;
+    });
+}
+
+// Function to populate dropdown with cluster options
+function populateClusterDropdown(options) {
+  const dropdown = document.getElementById("minClusterInput");
+  if (!dropdown || !options || options.length === 0) {
+    console.warn("No cluster options to populate or dropdown not found");
+    return;
+  }
+
+  // Clear existing options
+  dropdown.innerHTML = '';
+  
+  // Add default option
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Pilih min_cluster_size';
+  defaultOption.disabled = true;
+  defaultOption.selected = true;
+  dropdown.appendChild(defaultOption);
+  
+  // Add options from analysis results
+  options.forEach(option => {
+    const optionElement = document.createElement('option');
+    optionElement.value = option;
+    optionElement.textContent = option;
+    dropdown.appendChild(optionElement);
+  });
+  
+  console.log(`Populated dropdown with ${options.length} options:`, options);
+}
+
+// Updated BERTopic analysis function
 function jalankanAnalisisBertopic(namaFile) {
   const hasilDiv = document.getElementById("hasilBertopic");
   const paramDiv = document.getElementById("parameterTerbaik");
   const containerDiv = document.getElementById("analisisBertopic");
+  const clusterSizeSection = document.getElementById("pilihClusterSize");
+
+  // Store filename for later use
+  currentFilename = namaFile;
 
   // Tampilkan loading
   hasilDiv.innerHTML = `
@@ -455,16 +587,16 @@ function jalankanAnalisisBertopic(namaFile) {
     .then((response) => response.json())
     .then((data) => {
       if (data.error) {
-        hasilDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+        hasilDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
         return;
       }
 
       console.log("Received data:", data);
 
-      // METODE SEDERHANA: Langsung masukkan HTML tanpa parsing kompleks
+      // Display plot
       hasilDiv.innerHTML = data.plot_html;
 
-      // Cari semua script di dalam HTML yang baru dimasukkan
+      // Execute scripts in the plot HTML
       const scripts = hasilDiv.querySelectorAll('script');
       console.log("Found scripts:", scripts.length);
 
@@ -487,14 +619,30 @@ function jalankanAnalisisBertopic(namaFile) {
       // Tampilkan parameter
       if (data.best_params) {
         paramDiv.innerHTML = `
-          <p><strong>min_cluster_size terbaik:</strong> ${data.best_params.min_cluster_size}</p>
-          <p><strong>Coherence Score:</strong> ${parseFloat(data.best_params.coherence_score).toFixed(4)}</p>
+          <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin:15px 0;">
+            <p><strong>Parameter Terbaik:</strong></p>
+            <p><strong>min_cluster_size:</strong> ${data.best_params.min_cluster_size}</p>
+            <p><strong>Coherence Score:</strong> ${parseFloat(data.best_params.coherence_score).toFixed(4)}</p>
+          </div>
         `;
+      }
+
+      // Populate cluster dropdown with options from analysis
+      if (data.cluster_options && data.cluster_options.length > 0) {
+        clusterOptions = data.cluster_options;
+        populateClusterDropdown(clusterOptions);
+        
+        // Show cluster selection section
+        if (clusterSizeSection) {
+          clusterSizeSection.style.display = 'block';
+        }
+      } else {
+        console.warn("No cluster options received from server");
       }
 
       containerDiv.classList.add("active");
 
-      // Debug check setelah 2 detik
+      // Debug check after 2 seconds
       setTimeout(() => {
         const plotDivs = hasilDiv.querySelectorAll('.plotly-graph-div');
         console.log("Plot divs found:", plotDivs.length);
@@ -510,98 +658,228 @@ function jalankanAnalisisBertopic(namaFile) {
     })
     .catch((error) => {
       console.error("Error:", error);
-      hasilDiv.innerHTML = `<p>Terjadi kesalahan: ${error.message}</p>`;
+      hasilDiv.innerHTML = `<p style="color:red;">Terjadi kesalahan: ${error.message}</p>`;
     });
 }
 
+// Make function available globally
+window.generateTopikDenganLabel = generateTopikDenganLabel;
+
 function jalankanAnalisisKeyword(namaFile) {
   const hasilDiv = document.getElementById("hasilKeyword");
-  if (!hasilDiv) return;
+  const containerDiv = document.getElementById("analisisKeyword");
+  const chartImg = document.getElementById("topFieldsChartImg");
+  const clusterSelector = document.getElementById("clusterSelector");
+  const recommendationCard = document.querySelector(".recommendation-card");
+  const fundamentalGroupsList = document.querySelector(".fundamental-groups-list");
 
-  // Show loading state
-  hasilDiv.innerHTML = `
-    <div style="text-align:center;padding:20px;">
-      <p>Sedang memproses analisis Keyword Matching...</p>
-      <div style="border:4px solid #f3f3f3; border-top:4px solid #3498db; border-radius:50%; width:30px; height:30px; animation:spin 2s linear infinite; margin:0 auto;"></div>
-    </div>
-    <style>@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>
-  `;
+  // Simpan nama file untuk digunakan lagi kalau perlu
+  currentFilename = namaFile;
 
-  // Send analysis request
-  fetch("/analyze", {
-    method: "POST",
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ 
-      filename: namaFile, 
-      metode: "keyword" 
-    })
-  })
-  .then(res => {
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    return res.json();
-  })
-  .then(data => {
-    if (data.error) {
-      hasilDiv.innerHTML = `
-        <div style="color:red;padding:10px;border:1px solid red;border-radius:5px;">
-          <strong>Error:</strong> ${data.error}
-        </div>
-      `;
-      return;
-    }
-
-    // Handle keyword analysis results
-    if (data.results) {
-      let resultsHtml = '<h4>Hasil Matching Keywords:</h4>';
-      resultsHtml += '<div style="margin-top:15px;">';
-      
-      if (Array.isArray(data.results)) {
-        data.results.forEach((result, idx) => {
-          resultsHtml += `
-            <div style="margin-bottom:10px;padding:10px;border:1px solid #ddd;border-radius:5px;">
-              <strong>Match ${idx + 1}:</strong> ${result.keyword || result.text || result}
-              ${result.score ? `<span style="float:right;color:#666;">Score: ${result.score}</span>` : ''}
-            </div>
-          `;
-        });
-      } else {
-        resultsHtml += `<pre>${JSON.stringify(data.results, null, 2)}</pre>`;
-      }
-      
-      resultsHtml += '</div>';
-      hasilDiv.innerHTML = resultsHtml;
-    } else {
-      hasilDiv.innerHTML = `
-        <div style="color:orange;padding:10px;border:1px solid orange;border-radius:5px;">
-          <strong>Warning:</strong> Tidak ada hasil keyword matching yang ditemukan.
-        </div>
-      `;
-    }
-  })
-  .catch(err => {
-    console.error('Analysis error:', err);
+  // Tampilkan loading
+  if (hasilDiv) {
     hasilDiv.innerHTML = `
-      <div style="color:red;padding:10px;border:1px solid red;border-radius:5px;">
-        <strong>Error:</strong> ${err.message || 'Terjadi kesalahan saat analisis'}
+      <div style="text-align:center;padding:20px;">
+        <p>Memproses analisis Keyword Matching...</p>
+        <div class="loader"></div>
       </div>
     `;
-  });
+  }
+
+  // Reset tampilan
+  if (chartImg) chartImg.style.display = "none";
+  if (recommendationCard) recommendationCard.innerHTML = "";
+  if (fundamentalGroupsList) fundamentalGroupsList.innerHTML = "";
+
+  fetch("/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `filename=${encodeURIComponent(namaFile)}&metode=keyword`,
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.error) {
+        if (hasilDiv) {
+          hasilDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+        }
+        return;
+      }
+
+      console.log("Hasil Keyword Matching:", data);
+
+      // Tampilkan chart base64 di img element
+      if (data.chart && chartImg) {
+        chartImg.src = `data:image/png;base64,${data.chart}`;
+        chartImg.style.display = "block";
+      }
+
+      // Tampilkan grouped result jika ada
+      if (data.grouped && recommendationCard) {
+        displayGroupedResults(data.grouped);
+      }
+
+      // Clear hasil div jika ada
+      if (hasilDiv) {
+        hasilDiv.innerHTML = "";
+      }
+
+      // Aktifkan container
+      containerDiv.classList.add("active");
+
+      // Setup event listener untuk dropdown cluster
+      setupClusterSelector(namaFile);
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      if (hasilDiv) {
+        hasilDiv.innerHTML = `<p style="color:red;">Terjadi kesalahan: ${error.message}</p>`;
+      }
+    });
 }
 
-// ===================
-// Utility Functions
-// ===================
-function backToHome() {
-  showPage('home');
+function setupClusterSelector(filename) {
+  const clusterSelector = document.getElementById("clusterSelector");
+  
+  if (clusterSelector) {
+    // Remove existing event listeners
+    clusterSelector.replaceWith(clusterSelector.cloneNode(true));
+    const newClusterSelector = document.getElementById("clusterSelector");
+    
+    newClusterSelector.addEventListener("change", function() {
+      const numGroups = parseInt(this.value);
+      generateGroups(filename, numGroups);
+    });
+
+    // Generate default groups (5)
+    generateGroups(filename, 5);
+  }
 }
 
-// Handle back buttons if they exist
-const backBtns = document.querySelectorAll('[id^="backBtn"]');
-backBtns.forEach(btn => {
-  btn.addEventListener('click', backToHome);
-});
+function generateGroups(filename, numGroups) {
+  const recommendationCard = document.querySelector(".recommendation-card");
+  const fundamentalGroupsList = document.querySelector(".fundamental-groups-list");
+
+  // Show loading
+  if (recommendationCard) {
+    recommendationCard.innerHTML = `
+      <div style="text-align:center;padding:10px;">
+        <p>Mengelompokkan bidang ilmu...</p>
+        <div class="loader" style="width:20px;height:20px;"></div>
+      </div>
+    `;
+  }
+
+  fetch("/generate_groups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: filename,
+      num_groups: numGroups
+    })
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.error) {
+        if (recommendationCard) {
+          recommendationCard.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+        }
+        return;
+      }
+
+      console.log("Generated Groups:", data);
+      displayGroupedResults(data.groups);
+    })
+    .catch(error => {
+      console.error("Error generating groups:", error);
+      if (recommendationCard) {
+        recommendationCard.innerHTML = `<p style="color:red;">Terjadi kesalahan: ${error.message}</p>`;
+      }
+    });
+}
+
+function displayGroupedResults(groups) {
+  const recommendationCard = document.querySelector(".recommendation-card");
+  const fundamentalGroupsList = document.querySelector(".fundamental-groups-list");
+
+  // Handle different response formats (array of objects vs string)
+  let parsedGroups = groups;
+  if (typeof groups === 'string') {
+    try {
+      parsedGroups = JSON.parse(groups);
+    } catch (e) {
+      console.warn("Could not parse groups as JSON, treating as string");
+      if (recommendationCard) {
+        recommendationCard.innerHTML = `
+          <div class="text-response">
+            <h4>Hasil Pengelompokan:</h4>
+            <pre style="white-space: pre-wrap; font-family: Arial; font-size: 14px;">${groups}</pre>
+          </div>
+        `;
+      }
+      if (fundamentalGroupsList) {
+        fundamentalGroupsList.innerHTML = "";
+      }
+      return;
+    }
+  }
+
+  if (!parsedGroups || !Array.isArray(parsedGroups) || parsedGroups.length === 0) {
+    if (recommendationCard) {
+      recommendationCard.innerHTML = `<p>Tidak ada hasil pengelompokan yang ditemukan.</p>`;
+    }
+    return;
+  }
+
+  // Display summary in recommendation card
+  if (recommendationCard) {
+    const totalFields = parsedGroups.reduce((total, group) => {
+      return total + (group.fields && Array.isArray(group.fields) ? group.fields.length : 0);
+    }, 0);
+
+    recommendationCard.innerHTML = `
+      <div class="summary-stats">
+        <div class="stat-item">
+          <span class="stat-number">${parsedGroups.length}</span>
+          <span class="stat-label">Kelompok Riset</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number">${totalFields}</span>
+          <span class="stat-label">Total Bidang</span>
+        </div>
+      </div>
+      <p class="summary-text">Hasil pengelompokan bidang ilmu berdasarkan kesamaan topik dan fokus penelitian.</p>
+    `;
+  }
+
+  // Display detailed groups
+  if (fundamentalGroupsList) {
+    let groupsHtml = "";
+    
+    parsedGroups.forEach((group, index) => {
+      const fieldsHtml = group.fields && Array.isArray(group.fields) 
+        ? group.fields.map(field => `<span class="field-tag">${field}</span>`).join(" ")
+        : "<span class='field-tag'>Tidak ada bidang</span>";
+
+      groupsHtml += `
+        <div class="group-card">
+          <div class="group-header">
+            <h4 class="group-title">${group.name || `Kelompok ${index + 1}`}</h4>
+            <span class="field-count">${group.fields ? group.fields.length : 0} bidang</span>
+          </div>
+          <div class="group-description">
+            <p>${group.description || "Deskripsi tidak tersedia"}</p>
+          </div>
+          <div class="group-fields">
+            ${fieldsHtml}
+          </div>
+        </div>
+      `;
+    });
+
+    fundamentalGroupsList.innerHTML = groupsHtml;
+  }
+}
+
 
 // ===================
 // Initialize Application
@@ -616,4 +894,5 @@ document.addEventListener("DOMContentLoaded", function() {
   
   // Initialize default analysis slide
   showAnalisisSlide('default');
+
 });

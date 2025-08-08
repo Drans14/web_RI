@@ -191,14 +191,92 @@
             <div id="parameterTerbaik" class="parameter-box">
               <p class="placeholder">Belum ada parameter ditemukan.</p>
             </div>
+
+            <!-- Section untuk memilih cluster size dan generate topics -->
+            <div id="pilihClusterSize" style="margin-top: 20px; display: none;">
+              <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <h4 style="margin-bottom: 15px; color: #333;">Generate Topics with Labels</h4>
+                
+                <div style="margin-bottom: 15px;">
+                  <label for="minClusterInput" style="display: block; font-weight: bold; margin-bottom: 5px;">
+                    Pilih Min Cluster Size:
+                  </label>
+                  <select id="minClusterInput" style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+                    <option value="" disabled selected>Pilih min cluster size</option>
+                  </select>
+                </div>
+
+                <button onclick="generateTopikDenganLabel()" 
+                        style="background: #2E8B57; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                  Generate Topics & Labels
+                </button>
+              </div>
+            </div>
+
+            <!-- Hasil topik dengan label -->
+            <div id="hasilTopik" style="margin-top: 20px;"></div>
           </div>
 
 
           <div id="analisisKeyword" class="analisis-slide">
-            <h3>Hasil Analisis Matching Keyword</h3>
-            <div id="hasilKeyword"></div>
-          </div>
-        </div>
+              <div class="dashboard-container">
+                  <div class="content-grid">
+                      <!-- Left Panel - Chart -->
+                      <div class="left-panel">
+                          <div class="chart-section">
+                              <h3 class="section-title">Top 10 Bidang Ilmu</h3>
+                              <div class="chart-container">
+                                  <!-- Image untuk menampilkan chart base64 dari Flask -->
+                                  <img id="topFieldsChartImg" 
+                                      alt="Top Fields Chart" 
+                                      style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;">
+                                  
+                                  <!-- Fallback div untuk hasil jika diperlukan -->
+                                  <div id="hasilKeyword" style="min-height: 200px;"></div>
+                                  
+                                  <!-- Canvas lama disembunyikan karena kita pakai base64 dari backend -->
+                                  <canvas id="topFieldsChart" style="display: none;"></canvas>
+                              </div>
+                          </div>
+                      </div>
+
+                      <!-- Right Panel -->
+                      <div class="right-panel">
+                          <!-- Dropdown Section -->
+                          <div class="dropdown-section">
+                              <h3 class="section-title">Jumlah Kelompok Fundamental Research</h3>
+                              <div class="dropdown-container">
+                                  <select class="custom-dropdown" id="clusterSelector">
+                                      <option value="1">1 Kelompok</option>
+                                      <option value="2">2 Kelompok</option>
+                                      <option value="3">3 Kelompok</option>
+                                      <option value="4">4 Kelompok</option>
+                                      <option value="5" selected>5 Kelompok</option>
+                                      <option value="6">6 Kelompok</option>
+                                      <option value="7">7 Kelompok</option>
+                                      <option value="8">8 Kelompok</option>
+                                      <option value="9">9 Kelompok</option>
+                                      <option value="10">10 Kelompok</option>
+                                  </select>
+                              </div>
+                          </div>
+
+                          <!-- Recommendation Section -->
+                          <div class="recommendation-section">
+                              <h3 class="section-title">Rekomendasi Fokus Riset Utama</h3>
+                              <div class="recommendation-card">
+                                  <div class="empty-state">
+                                      <p>Pilih file dan jalankan analisis keyword matching untuk melihat rekomendasi</p>
+                                  </div>
+                              </div>
+                              <div class="fundamental-groups-list">
+                                  <!-- Groups akan ditampilkan di sini -->
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>      
       </section>
     </div>
   </div>

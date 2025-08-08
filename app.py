@@ -4,20 +4,22 @@ import pandas as pd
 from flask import render_template_string
 # Import dari backend
 from backend.models.preprocessing import preprocess_dataframe
-from backend.models.model_bert import bertopic_analysis
-from backend.models.model_match import keyword_matching
+from backend.models.model_bert import bertopic_analysis, generate_topics_with_label
+from backend.models.model_match import keyword_matching,group_fields_with_groq, get_top10_chart_df
+import base64
+from io import BytesIO
 
-# Inisialisasi Flask dengan path ke template dan static
 app = Flask(__name__,
             template_folder='frontend/templates',
             static_folder='frontend/static')
 
-# Konfigurasi folder unggahan
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Halaman utama
+# In-memory cache untuk menyimpan model dan data
+analysis_cache = {}
+
 @app.route('/')
 def index():
     return render_template(
@@ -26,7 +28,6 @@ def index():
         best_params={})
 
 
-# Upload file
 @app.route('/upload', methods=['POST'])
 def upload_file():
     file = request.files['file']
@@ -38,7 +39,7 @@ def upload_file():
         return 'OK'
     return 'Format salah'
 
-# Daftar file
+
 @app.route('/files')
 def list_files():
     files = []
@@ -52,26 +53,26 @@ def list_files():
             })
     return jsonify(files)
 
-# delete file
+
 @app.route('/delete', methods=['POST'])
 def delete_file():
     try:
-        file_name = request.form.get('name')  # <- Sesuaikan dengan JS: formData.append('name', file.name)
+        file_name = request.form.get('name')
         if not file_name:
             return "No filename provided", 400
 
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_name)
         if os.path.exists(file_path):
             os.remove(file_path)
+            # Hapus dari cache juga
+            analysis_cache.pop(file_name, None)
             return "OK"
         else:
             return "File not found", 404
-
     except Exception as e:
         return f"Error: {str(e)}", 500
 
 
-# Analisis file
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
@@ -96,9 +97,7 @@ def analyze():
         # Load dan preprocessing
         df = pd.read_csv(filepath)
         df = preprocess_dataframe(df)
-        print(f"Data loaded: {len(df)} rows")
 
-        # Jalankan metode analisis
         if metode == 'bertopic':
             print("Starting BERTopic analysis...")
             hasil = bertopic_analysis(df)
@@ -109,48 +108,139 @@ def analyze():
                 print(f"Analysis error: {hasil['error']}")
                 return jsonify({'error': hasil['error']}), 500
 
-            # Debug plot_html
-            if 'plot_html' in hasil:
-                plot_html = hasil['plot_html']
-                print(f"Plot HTML length: {len(plot_html)}")
-                print(f"Plot HTML preview: {plot_html[:200]}...")
-                
-                # Cek apakah mengandung script Plotly
-                if 'Plotly.newPlot' in plot_html:
-                    print("✓ Plot HTML contains Plotly.newPlot")
-                else:
-                    print("✗ Plot HTML missing Plotly.newPlot")
-                    
-                # Cek apakah ada div dengan id yang benar
-                if 'class="plotly-graph-div"' in plot_html:
-                    print("✓ Plot HTML contains plotly-graph-div")
-                else:
-                    print("✗ Plot HTML missing plotly-graph-div")
-            else:
-                print("✗ No plot_html in result")
+            # Simpan cache untuk generate topics nanti
+            if 'cache_data' in hasil:
+                analysis_cache[filename] = hasil['cache_data']
+                print(f"Cache saved for {filename}")
 
+            # Ambil min_cluster_range yang sudah dievaluasi untuk dropdown
+            cluster_options = hasil.get('cluster_options', [])
+            
             response_data = {
                 "plot_html": hasil["plot_html"],
-                "best_params": hasil["best_params"]
+                "best_params": hasil["best_params"],
+                "cluster_options": cluster_options  # Kirim opsi cluster ke frontend
             }
             
             print("Sending response to client")
             return jsonify(response_data)
 
         elif metode == 'keyword':
+            print("Starting Match analysis...")
             hasil = keyword_matching(df)
-            return jsonify(hasil)
+            
+            # Perbaikan: pass DataFrame lengkap, bukan hanya kolom
+            grouped_result = group_fields_with_groq(hasil, 5)  # Default 5 groups
+
+            # Hitung Top 10 bidang ilmu
+            img_base64 = get_top10_chart_df(hasil)
+            
+            # Store hasil untuk generate_groups endpoint
+            analysis_cache[filename] = {
+                "hasil_df": hasil,
+                "top_fields": hasil['Bidang_Ilmu_ACM'].tolist() if 'Bidang_Ilmu_ACM' in hasil.columns else []
+            }
+
+            return jsonify({
+                "chart": img_base64,
+                "grouped": grouped_result
+            })
 
         else:
             return jsonify({'error': 'Metode tidak dikenali'}), 400
 
     except Exception as e:
         import traceback
-        print(f"=== ERROR IN ANALYZE ===")
-        print(f"Error: {str(e)}")
-        print("Traceback:")
         print(traceback.format_exc())
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
+
+@app.route("/generate_topics", methods=["POST"])
+def generate_topics():
+    data = request.get_json()
+    filename = data.get("filename")
+    min_cluster_size = int(data.get("min_cluster_size"))
+    
+
+    print(f"Generate topics request - File: {filename}, Min cluster: {min_cluster_size}")
+
+    if not filename or filename not in analysis_cache:
+        return jsonify({"error": "Data analisis tidak ditemukan. Silakan jalankan analisis BERTopic terlebih dahulu."}), 400
+
+    try:
+        cache = analysis_cache[filename]
+        print(f"Using cached data for {filename}")
+        
+        # Panggil fungsi generate topics dengan data yang sudah di-cache
+        result = generate_topics_with_label(
+            docs=cache["docs"],
+            embeddings=cache["embeddings"],
+            embedding_model=cache["embedding_model"],
+            umap_model=cache["umap_model"],
+            vectorizer_model=cache["vectorizer_model"],
+            ctfidf_model=cache["ctfidf_model"],
+            representation_model=cache["representation_model"],
+            min_cluster_size=min_cluster_size
+        )
+
+        if isinstance(result, dict) and "error" in result:
+            return jsonify(result), 500
+
+        topic_model, topic_info = result
+        
+        # Filter topik yang valid (bukan outlier)
+        valid_topics = topic_info[topic_info["Topic"] != -1][["Topic", "Name", "Count"]]
+        valid_topics = valid_topics.rename(columns={"Topic": "topic", "Name": "label", "Count": "count"})
+        
+        return jsonify({
+            "topic_count": len(valid_topics),
+            "topics": valid_topics.to_dict(orient="records")
+        })
+
+    except Exception as e:
+        import traceback
+        print("Generate topics error:")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+@app.route("/generate_groups", methods=["POST"])
+def generate_groups():
+    data = request.get_json()
+    filename = data.get("filename")
+    num_groups = int(data.get("num_groups", 5))
+    
+    if not filename or filename not in analysis_cache:
+        return jsonify({
+            "error": "Data analisis tidak ditemukan. Silakan jalankan keyword matching terlebih dahulu."
+        }), 400
+    
+    try:
+        # Ambil hasil DataFrame dari cache
+        cache = analysis_cache[filename]
+        hasil_df = cache.get("hasil_df")
+        
+        if hasil_df is None:
+            return jsonify({
+                "error": "DataFrame hasil tidak ditemukan dalam cache"
+            }), 400
+        
+        # Panggil Groq untuk mengelompokkan dengan jumlah group yang diminta
+        from backend.models.model_match import group_fields_with_groq
+        grouped = group_fields_with_groq(hasil_df, num_groups)
+        
+        return jsonify({
+            "group_count": len(grouped),
+            "groups": grouped
+        })
+        
+    except Exception as e:
+        import traceback
+        print("Error in generate_groups:")
+        print(traceback.format_exc())
+        return jsonify({
+            "error": f"Terjadi kesalahan: {str(e)}",
+            "traceback": traceback.format_exc()
+        }), 500
+    
 if __name__ == '__main__':
     app.run(debug=False)
