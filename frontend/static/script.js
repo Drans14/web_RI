@@ -895,4 +895,6 @@ document.addEventListener("DOMContentLoaded", function() {
   // Initialize default analysis slide
   showAnalisisSlide('default');
 
+
 });
+

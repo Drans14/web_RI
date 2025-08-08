@@ -6,6 +6,8 @@ from flask import render_template_string
 from backend.models.preprocessing import preprocess_dataframe
 from backend.models.model_bert import bertopic_analysis, generate_topics_with_label
 from backend.models.model_match import keyword_matching,group_fields_with_groq, get_top10_chart_df
+from backend.models.model_match import keyword_matching
+
 import base64
 from io import BytesIO
 
@@ -153,6 +155,57 @@ def analyze():
         import traceback
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+
+
+@app.route("/generate_topics", methods=["POST"])
+def generate_topics():
+    data = request.get_json()
+    filename = data.get("filename")
+    min_cluster_size = int(data.get("min_cluster_size"))
+    
+
+    print(f"Generate topics request - File: {filename}, Min cluster: {min_cluster_size}")
+
+    if not filename or filename not in analysis_cache:
+        return jsonify({"error": "Data analisis tidak ditemukan. Silakan jalankan analisis BERTopic terlebih dahulu."}), 400
+
+    try:
+        cache = analysis_cache[filename]
+        print(f"Using cached data for {filename}")
+        
+        # Panggil fungsi generate topics dengan data yang sudah di-cache
+        result = generate_topics_with_label(
+            docs=cache["docs"],
+            embeddings=cache["embeddings"],
+            embedding_model=cache["embedding_model"],
+            umap_model=cache["umap_model"],
+            vectorizer_model=cache["vectorizer_model"],
+            ctfidf_model=cache["ctfidf_model"],
+            representation_model=cache["representation_model"],
+            min_cluster_size=min_cluster_size
+        )
+
+        if isinstance(result, dict) and "error" in result:
+            return jsonify(result), 500
+
+        topic_model, topic_info = result
+        
+        # Filter topik yang valid (bukan outlier)
+        valid_topics = topic_info[topic_info["Topic"] != -1][["Topic", "Name", "Count"]]
+        valid_topics = valid_topics.rename(columns={"Topic": "topic", "Name": "label", "Count": "count"})
+        
+        return jsonify({
+            "topic_count": len(valid_topics),
+            "topics": valid_topics.to_dict(orient="records")
+        })
+
+    except Exception as e:
+        import traceback
+        print("Generate topics error:")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+
 
 
 @app.route("/generate_topics", methods=["POST"])

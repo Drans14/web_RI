@@ -18,10 +18,15 @@ from bertopic.representation import KeyBERTInspired
 import joblib
 import requests
 import json
+import requests
+import json
 from .preprocessing import preprocess_dataframe,simple_tokenizer
 import torch
 import plotly.io as pio
+import torch
+import plotly.io as pio
 import plotly.express as px
+
 
 
 def bertopic_analysis(df):
@@ -136,9 +141,14 @@ def bertopic_analysis(df):
         # Simpan opsi cluster yang valid untuk dropdown
         valid_clusters = []
         
+
+        # Simpan opsi cluster yang valid untuk dropdown
+        valid_clusters = []
+        
         for min_cluster, coherence, model in results:
             if not np.isnan(coherence):
                 print(f"min_cluster_size = {min_cluster} → Coherence = {coherence:.4f}")
+                valid_clusters.append(min_cluster)
                 valid_clusters.append(min_cluster)
                 if coherence > best_score:
                     best_score = coherence
@@ -183,6 +193,17 @@ def bertopic_analysis(df):
                 )
 
             plot_html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn', div_id="coherence-plot")
+
+        # Siapkan data untuk cache (untuk generate topics nanti)
+        cache_data = {
+            "docs": docs,
+            "embeddings": embeddings,
+            "embedding_model": embedding_model,
+            "umap_model": umap_model,
+            "vectorizer_model": vectorizer_model,
+            "ctfidf_model": ctfidf_model,
+            "representation_model": representation_model,
+        }
 
         # Siapkan data untuk cache (untuk generate topics nanti)
         cache_data = {
@@ -280,7 +301,7 @@ def generate_topics_with_label(
 def generate_labels_with_groq(topic_info):
     """Generate labels untuk setiap topik menggunakan Groq API"""
     auto_labels = {}
-    api_key = "masukan_api_key_di_sini"  # Ganti dengan API key Groq Anda
+    api_key = "masukan_api_key_anda_di_sini"  # Ganti dengan API key Groq Anda
     base_url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
