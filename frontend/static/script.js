@@ -1,6 +1,4 @@
-// ===================
 // Sidebar Navigation
-// ===================
 const hamburgerBtn   = document.getElementById('hamburgerBtn');
 const sidebar        = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -45,9 +43,8 @@ window.addEventListener('resize', function() {
   }
 });
 
-// ===================
 // Page Navigation
-// ===================
+// Page Navigation
 const pages = {
   home:      document.getElementById('homePage'),
   dashboard: document.getElementById('dashboardPage'),
@@ -60,14 +57,15 @@ function showPage(page) {
   Object.values(pages).forEach(p => {
     if (p) {
       p.style.display = 'none';
+      p.setAttribute('hidden', '');              // <-- BARU: tandai disembunyikan
     }
   });
   
   // Show selected page
   if (pages[page]) {
     pages[page].style.display = 'block';
+    pages[page].removeAttribute('hidden');       // <-- BARU: tandai terlihat
     
-    // Load files when showing upload page
     if (page === 'upload') {
       loadFilesFromServer();
     }
@@ -84,6 +82,9 @@ function showPage(page) {
   if (window.innerWidth < 1200 && sidebar.classList.contains('open')) {
     toggleSidebar();
   }
+
+  // <-- BARU: fallback untuk CSS tanpa :has()
+  document.getElementById('mainArea').classList.toggle('is-home', page === 'home');
 }
 
 function goToHome() {
@@ -113,9 +114,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
   });
 });
 
-// ===================
 // Upload & File Table
-// ===================
 let uploadedFiles = [];
 
 const dropzone       = document.querySelector('.dropzone');
@@ -323,9 +322,7 @@ if (dropzone) {
   });
 }
 
-// ===================
 // Analisis & Plot Handling
-// ===================
 function showAnalisisSlide(mode) {
   // Hide all analysis slides
   document.querySelectorAll('#analisisPage .analisis-slide').forEach(el => {
@@ -382,9 +379,7 @@ if (runAnalysisBtn) {
   });
 }
 
-// ===================
 // Analysis Functions
-// ===================
 // Fungsi untuk menyisipkan HTML berisi <script> dan mengeksekusinya
 function setInnerHTMLWithScripts(el, html) {
   // Kosongkan elemen terlebih dahulu
@@ -433,15 +428,13 @@ function setInnerHTMLWithScripts(el, html) {
   });
 }
 
-// ===================
 // Updated functions for topic generation
-// ===================
 
 function generateTopikDenganLabel() {
   const minClusterSizeSelect = document.getElementById("minClusterInput");
   const topicResultDiv = document.getElementById("hasilTopik");
   const minCluster = parseInt(minClusterSizeSelect.value);
-  
+
   // Gunakan currentFilename yang sudah disimpan saat analisis BERTopic
   if (!currentFilename) {
     alert("File belum diupload atau analisis BERTopic belum dijalankan.");
@@ -487,7 +480,7 @@ function generateTopikDenganLabel() {
 
       // Tampilkan hasil dengan styling yang sesuai dengan CSS
       let html = `<p><strong>Total Topics:</strong> ${data.topic_count}</p>`;
-      
+
       if (data.topics && data.topics.length > 0) {
         html += `
           <table style="width:100%; border-collapse:collapse; margin-top:10px;">
@@ -500,17 +493,17 @@ function generateTopikDenganLabel() {
             </thead>
             <tbody>
         `;
-        
+
         data.topics.forEach((item) => {
           html += `
-            <tr style="border-bottom:1px solid #ddd;">
+            <tr style="border-bottom:1px solid #8d2e2e;">
               <td style="padding:10px;">${item.topic}</td>
               <td style="padding:10px; font-weight:bold;">${item.label || `Topic ${item.topic}`}</td>
               <td style="padding:10px;">${item.count || 'N/A'}</td>
             </tr>
           `;
         });
-        
+
         html += `
             </tbody>
           </table>
@@ -518,8 +511,19 @@ function generateTopikDenganLabel() {
       } else {
         html += `<p style="color:orange;">No topics generated.</p>`;
       }
-      
+
       topicResultDiv.innerHTML = html;
+
+      // === SISIPAN: simpan peta TopicID -> Label utk render groups selanjutnya ===
+      window.topicIdToName = {};
+      (data.topics || []).forEach(t => {
+        window.topicIdToName[t.topic] = t.label || `Topic ${t.topic}`;
+      });
+
+      // === SISIPAN: tampilkan section Hierarchy & Research Groups ===
+      const hierSec = document.getElementById("bertHierarchyAndGroups");
+      if (hierSec) hierSec.style.display = "block";
+
     })
     .catch((error) => {
       console.error("Gagal generate topic:", error);
@@ -568,10 +572,9 @@ function jalankanAnalisisBertopic(namaFile) {
   const containerDiv = document.getElementById("analisisBertopic");
   const clusterSizeSection = document.getElementById("pilihClusterSize");
 
-  // Store filename for later use
   currentFilename = namaFile;
 
-  // Tampilkan loading
+  // Loading
   hasilDiv.innerHTML = `
     <div style="text-align:center;padding:20px;">
       <p>Memproses analisis BERTopic...</p>
@@ -584,82 +587,99 @@ function jalankanAnalisisBertopic(namaFile) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `filename=${encodeURIComponent(namaFile)}&metode=bertopic`,
   })
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.error) {
-        hasilDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
-        return;
-      }
+  .then((response) => response.json())
+  .then((data) => {
+    if (data.error) {
+      hasilDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+      return;
+    }
 
-      console.log("Received data:", data);
+    // --- SISIPKAN PLOT KE DALAM .plot-slide ---
+    hasilDiv.classList.add("plot-container"); // jaga-jaga bila belum ada
+    hasilDiv.innerHTML = `<div class="plot-slide"></div>`;
+    const slideEl = hasilDiv.querySelector(".plot-slide");
 
-      // Display plot
-      hasilDiv.innerHTML = data.plot_html;
+    // Masukkan HTML plot ke dalam slide
+    slideEl.innerHTML = data.plot_html;
 
-      // Execute scripts in the plot HTML
-      const scripts = hasilDiv.querySelectorAll('script');
-      console.log("Found scripts:", scripts.length);
-
-      // Eksekusi setiap script
-      scripts.forEach((oldScript, index) => {
-        const newScript = document.createElement('script');
-        
-        if (oldScript.src) {
-          newScript.src = oldScript.src;
-          console.log(`Loading external script ${index}:`, oldScript.src);
-        } else {
-          newScript.textContent = oldScript.textContent;
-          console.log(`Executing inline script ${index}`);
-        }
-
-        // Replace script lama dengan yang baru
-        oldScript.parentNode.replaceChild(newScript, oldScript);
-      });
-
-      // Tampilkan parameter
-      if (data.best_params) {
-        paramDiv.innerHTML = `
-          <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin:15px 0;">
-            <p><strong>Parameter Terbaik:</strong></p>
-            <p><strong>min_cluster_size:</strong> ${data.best_params.min_cluster_size}</p>
-            <p><strong>Coherence Score:</strong> ${parseFloat(data.best_params.coherence_score).toFixed(4)}</p>
-          </div>
-        `;
-      }
-
-      // Populate cluster dropdown with options from analysis
-      if (data.cluster_options && data.cluster_options.length > 0) {
-        clusterOptions = data.cluster_options;
-        populateClusterDropdown(clusterOptions);
-        
-        // Show cluster selection section
-        if (clusterSizeSection) {
-          clusterSizeSection.style.display = 'block';
-        }
-      } else {
-        console.warn("No cluster options received from server");
-      }
-
-      containerDiv.classList.add("active");
-
-      // Debug check after 2 seconds
-      setTimeout(() => {
-        const plotDivs = hasilDiv.querySelectorAll('.plotly-graph-div');
-        console.log("Plot divs found:", plotDivs.length);
-        
-        if (plotDivs.length > 0) {
-          plotDivs.forEach((div, i) => {
-            console.log(`Plot div ${i}:`, div.id, div.style.width, div.style.height);
-          });
-        } else {
-          console.error("No plot divs found after script execution!");
-        }
-      }, 2000);
-    })
-    .catch((error) => {
-      console.error("Error:", error);
-      hasilDiv.innerHTML = `<p style="color:red;">Terjadi kesalahan: ${error.message}</p>`;
+    // Eksekusi <script> di dalam plot (Plotly dll.)
+    const scripts = slideEl.querySelectorAll("script");
+    scripts.forEach((oldScript) => {
+      const newScript = document.createElement("script");
+      if (oldScript.src) newScript.src = oldScript.src;
+      else newScript.textContent = oldScript.textContent;
+      oldScript.parentNode.replaceChild(newScript, oldScript);
     });
+
+    // --- PARAMETER TERBAIK ---
+    if (data.best_params) {
+      paramDiv.innerHTML = `
+        <div class="parameter-container">
+          <h2>Parameter Terbaik</h2>
+          <div class="parameter-items">
+            <div class="parameter-box">
+              <span class="label">Min Cluster Size</span>
+              <div class="value" id="minClusterValue">${data.best_params.min_cluster_size}</div>
+            </div>
+            <div class="parameter-box">
+              <span class="label">Coherence Score</span>
+              <div class="value" id="coherenceValue">
+                ${parseFloat(data.best_params.coherence_score).toFixed(4)}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- DROPDOWN CLUSTER ---
+    if (data.cluster_options && data.cluster_options.length > 0) {
+      clusterOptions = data.cluster_options;
+      populateClusterDropdown(clusterOptions);
+      if (clusterSizeSection) clusterSizeSection.style.display = "block";
+    }
+
+    containerDiv.classList.add("active");
+
+    // ---- LOGIKA SLIDE SAAT OVERFLOW ----
+    function applySlide() {
+      // tunggu semua SVG/Plotly resize selesai
+      requestAnimationFrame(() => {
+        const cw = hasilDiv.clientWidth;
+        const sw = slideEl.scrollWidth;
+        const overflow = sw > cw + 2;
+        hasilDiv.classList.toggle("is-overflow", overflow);
+        if (overflow) {
+          const dx = -(sw - cw);          // geser maksimal ke kiri
+          slideEl.style.setProperty("--dx", dx + "px");
+        } else {
+          slideEl.style.removeProperty("--dx");
+        }
+      });
+    }
+
+    // Re-cek setelah render Plotly (sedikit jeda)
+    setTimeout(applySlide, 300);
+    // Saat resize window
+    window.addEventListener("resize", applySlide);
+
+    // Perubahan DOM (Plotly relayout/react) -> hitung ulang
+    const mo = new MutationObserver(() => applySlide());
+    mo.observe(slideEl, { childList: true, subtree: true, attributes: true });
+
+    // Debug opsional
+    setTimeout(() => {
+      const plotDivs = hasilDiv.querySelectorAll(".plotly-graph-div");
+      console.log("Plot divs found:", plotDivs.length);
+      plotDivs.forEach((div, i) => {
+        console.log(`Plot div ${i}:`, div.id, div.style.width, div.style.height);
+      });
+    }, 800);
+  })
+  .catch((error) => {
+    console.error("Error:", error);
+    hasilDiv.innerHTML = `<p style="color:red;">Terjadi kesalahan: ${error.message}</p>`;
+  });
 }
 
 // Make function available globally
@@ -880,10 +900,7 @@ function displayGroupedResults(groups) {
   }
 }
 
-
-// ===================
 // Initialize Application
-// ===================
 document.addEventListener("DOMContentLoaded", function() {
   console.log("Research Intelligence App initialized");
   
@@ -895,6 +912,332 @@ document.addEventListener("DOMContentLoaded", function() {
   // Initialize default analysis slide
   showAnalisisSlide('default');
 
-
 });
 
+function buildHierarchyBertDefault() {
+  const plotDiv = document.getElementById("bertHierarchyPlot");
+  if (!currentFilename) { alert("Jalankan BERTopic dulu."); return; }
+  plotDiv.innerHTML = `<div style="text-align:center;padding:10px;"><p>Membangun hierarchy…</p><div class="loader"></div></div>`;
+  fetch("/bert_hierarchy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: currentFilename,
+      linkage_method: "ward",
+      optimal_ordering: true
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { plotDiv.innerHTML = `<p style="color:red;">${data.error}</p>`; return; }
+    plotDiv.innerHTML = data.plot_html;
+    const scripts = plotDiv.querySelectorAll("script");
+    scripts.forEach(s => { const n = document.createElement("script"); if (s.src) n.src = s.src; else n.textContent = s.textContent; s.parentNode.replaceChild(n, s); });
+  })
+  .catch(err => { plotDiv.innerHTML = `<p style="color:red;">${err.message}</p>`; });
+}
+
+function generateResearchGroupsBertDefault() {
+  const outDiv = document.getElementById("bertGroupsResult");
+  if (!currentFilename) { alert("Jalankan BERTopic dulu."); return; }
+  outDiv.innerHTML = `<div style="text-align:center;padding:10px;"><p>Mengelompokkan topik…</p><div class="loader"></div></div>`;
+  fetch("/bert_research_groups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: currentFilename,
+      // default yg “bagus umum”
+      color_threshold: 1.0,
+      linkage_method: "ward",
+      optimal_ordering: true,
+      distance: "cosine",
+      use_ctfidf: true,
+      max_name_words: 4
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { outDiv.innerHTML = `<p style="color:red;">${data.error}</p>`; return; }
+
+    // tampilkan MARKDOWN + tabel yang memuat LABEL topik (BUKAN representation)
+    let html = `<h4 style="margin:10px 0;">${data.group_count} Research Groups</h4>`;
+    html += `<pre style="white-space:pre-wrap;background:#fafafa;border:1px solid #eee;padding:12px;border-radius:8px;">${data.markdown}</pre>`;
+
+    if (data.groups && data.groups.length) {
+      html += `
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Group ID</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Group Name</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">#Topics</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Topic IDs</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid #ddd;">Topic Labels</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      data.groups.forEach(g => {
+        const labels = (g.topic_labels || []).map(t => `<span style="display:inline-block;margin:2px 6px 2px 0;padding:4px 8px;border:1px solid #e5e7eb;border-radius:999px;background:#f9fafb;">${t}</span>`).join("");
+        html += `
+          <tr>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;">${g.research_group}</td>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;font-weight:bold;">${g.group_name}</td>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;">${g.n_topics}</td>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;">${(g.topics || []).join(", ")}</td>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;">${labels}</td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+    }
+    outDiv.innerHTML = html;
+  })
+  .catch(err => { outDiv.innerHTML = `<p style="color:red;">${err.message}</p>`; });
+}
+
+// Function to build hierarchy and generate research groups
+function generateResearchGroupsBert() {
+  const outDiv = document.getElementById("bertGroupsResult");
+  if (!currentFilename) {
+    alert("Jalankan analisis BERTopic terlebih dahulu.");
+    return;
+  }
+
+  outDiv.innerHTML = `
+    <div style="text-align:center;padding:10px;">
+      <p>Mengelompokkan topik menjadi Research Groups…</p>
+      <div class="loader"></div>
+    </div>`;
+
+  fetch("/bert_research_groups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: currentFilename,
+      color_threshold: 1.0,
+      linkage_method: "ward",
+      optimal_ordering: true,
+      distance: "cosine",
+      use_ctfidf: true,
+      max_name_words: 4
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) {
+      outDiv.innerHTML = `<p style="color:red;">${escapeHTML(data.error)}</p>`;
+      return;
+    }
+
+    // ubah data groups menjadi kartu
+    const groups = (data.groups || []).map(g => {
+      // ambil label dari backend; fallback ke map topicIdToName jika ada
+      const labelArr = (g.topic_labels && g.topic_labels.length)
+        ? g.topic_labels
+        : (g.topics || []).map(id =>
+            (window.topicIdToName && window.topicIdToName[id])
+              ? window.topicIdToName[id]
+              : `Topic ${id}`
+          );
+      return {
+        id: g.research_group,
+        name: g.group_name,
+        labels: labelArr
+      };
+    });
+
+    renderResearchGroupCards(groups, outDiv, { initialChips: 8 });
+  })
+  .catch(err => {
+    outDiv.innerHTML = `<p style="color:red;">${escapeHTML(err.message)}</p>`;
+  });
+}
+
+// Render kartu 2 kolom (setengah layar). Collapse jika label banyak.
+function renderResearchGroupCards(groups, container, opts = {}) {
+  const { initialChips = 8 } = opts;
+  container.innerHTML = "";
+
+  if (!groups.length) {
+    container.innerHTML = `<p style="color:#666;">Belum ada research group.</p>`;
+    return;
+  }
+
+  groups.forEach(g => {
+    const card = document.createElement("div");
+    card.className = "group-card";
+
+    // header
+    const header = document.createElement("div");
+    header.className = "group-header";
+
+    const h = document.createElement("h4");
+    h.className = "group-name";
+    h.textContent = g.name || `Group ${g.id}`;
+
+    const pill = document.createElement("span");
+    pill.className = "group-id-pill";
+    pill.textContent = `ID: ${g.id}`;
+
+    header.appendChild(h);
+    header.appendChild(pill);
+
+    // subtitle
+    const sub = document.createElement("p");
+    sub.className = "subtle";
+    sub.textContent = "Topic Labels";
+
+    // labels
+    const labelsBox = document.createElement("div");
+    labelsBox.className = "labels";
+    (g.labels || []).forEach(lbl => {
+      const chip = document.createElement("span");
+      chip.className = "label-chip";
+      chip.textContent = lbl;
+      labelsBox.appendChild(chip);
+    });
+
+    card.appendChild(header);
+    card.appendChild(sub);
+    card.appendChild(labelsBox);
+
+    // collapse/expand
+    if ((g.labels || []).length > initialChips) {
+      labelsBox.classList.add("collapsed");
+      const btn = document.createElement("button");
+      btn.className = "labels-toggle";
+      const total = g.labels.length;
+      btn.textContent = `Lihat semua (${total})`;
+      btn.addEventListener("click", () => {
+        const collapsed = labelsBox.classList.toggle("collapsed");
+        btn.textContent = collapsed ? `Lihat semua (${total})` : "Sembunyikan";
+      });
+      card.appendChild(btn);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+// util
+function escapeHTML(str){
+  return String(str)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+(function enableDragScroll(){
+  const scroller = document.getElementById('hasilBertopic');
+  let isDown = false, startX = 0, startScroll = 0;
+
+  scroller.addEventListener('mousedown', (e)=>{
+    isDown = true;
+    scroller.classList.add('dragging');
+    startX = e.pageX;
+    startScroll = scroller.scrollLeft;
+  });
+  window.addEventListener('mouseup', ()=>{
+    isDown = false;
+    scroller.classList.remove('dragging');
+  });
+  scroller.addEventListener('mouseleave', ()=> isDown = false);
+  scroller.addEventListener('mousemove', (e)=>{
+    if(!isDown) return;
+    const dx = e.pageX - startX;
+    scroller.scrollLeft = startScroll - dx;
+  });
+})();
+
+// expose
+window.buildHierarchyBert = buildHierarchyBert;
+window.generateResearchGroupsBert = generateResearchGroupsBert;
+
+// Fungsi untuk update dashboard
+let lastCleanDocsFilename = null;
+function updateDashboard(filename, metode) {
+  fetch('/dashboard-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, metode })
+  })
+  .then(res => res.json())
+  .then(data => {
+    // Update clean-docs-count hanya jika dataset berbeda
+    if (lastCleanDocsFilename !== filename) {
+      document.getElementById('clean-docs-count').textContent = data.clean_docs_count;
+      lastCleanDocsFilename = filename;
+    }
+    // Data lain tetap diupdate setiap analisis
+    document.getElementById('research-group-count').textContent = data.research_group_count;
+    document.getElementById('bidang-ilmu-count').textContent = data.bidang_ilmu_count;
+
+    // Update bar chart
+    renderBarChart(data.chart_data);
+
+    // Update donut chart
+    renderDonutChart(data.chart_data);
+  });
+}
+
+// Contoh fungsi render bar chart dengan Chart.js
+function renderBarChart(chartData) {
+  const ctx = document.getElementById('research-group-bar-chart').getContext('2d');
+  const labels = chartData.map(d => d.group);
+  const values = chartData.map(d => d.team_count);
+
+  if (window.barChartInstance) window.barChartInstance.destroy();
+  window.barChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Jumlah Tim',
+        data: values,
+        backgroundColor: 'rgba(54, 162, 235, 0.5)'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+// Contoh fungsi render donut chart dengan Chart.js
+function renderDonutChart(chartData) {
+  const ctx = document.getElementById('research-group-donut-chart').getContext('2d');
+  const labels = chartData.map(d => d.group);
+  const percentages = chartData.map(d => d.percentage);
+
+  if (window.donutChartInstance) window.donutChartInstance.destroy();
+  window.donutChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Persentase (%)',
+        data: percentages,
+        backgroundColor: [
+          '#FF6B6B', '#FF9999', '#FFCCCC', '#4BC0C0', '#36A2EB', '#9966FF'
+        ]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+
+  // Update label di bawah donut chart
+  const labelDiv = document.getElementById('donut-labels');
+  labelDiv.innerHTML = '';
+  chartData.forEach(d => {
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = `${d.group}: ${d.percentage.toFixed(1)}%`;
+    labelDiv.appendChild(label);
+  });
+}

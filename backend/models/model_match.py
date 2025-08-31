@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
 import os
+import re
+import json
 
 # ==============================
 # BAGIAN 1: Utility Keyword Matching
@@ -69,7 +71,7 @@ def cari_bidang_ilmu_terbaik_dengan_fallback(text, df_topik, threshold=80):
 # ==============================
 # BAGIAN 2: Pemanggilan Groq API
 # ==============================
-api_key =  "masukan_api_key_di_sini"  # Ganti dengan API key Groq Anda
+api_key =  "masukkan_api_key"  # Ganti dengan API key Groq Anda
 base_url = "https://api.groq.com/openai/v1/chat/completions"
 
 def get_groq_response(prompt, model="llama3-70b-8192"):
@@ -107,38 +109,43 @@ I have the following scientific research fields:
 {daftar}
 
 Please group them into {n_groups} fundamental research groups based on thematic similarity.
+
 For each group, provide:
 1. A descriptive group name (2-4 words)
 2. A brief description explaining the group's focus
 3. List all fields that belong to this group
 
-Return the result in JSON format like this:
+Return ONLY a valid JSON array, with no extra text, like this:
 [
   {{
     "name": "Group Name",
     "description": "Brief description of the group's focus",
     "fields": ["Field 1", "Field 2", "Field 3"]
   }},
-  ...
+
 ]
 
 Make sure each field appears in exactly one group.
+Do not include any explanations outside the JSON.
 """
+
+import re
+import json
 
 def parse_groq_response(response_text):
     """Parse respons Groq menjadi format yang konsisten"""
     if not response_text:
         return []
     
+    # Coba temukan potongan JSON di dalam teks
     try:
-        # Coba parse sebagai JSON dulu
-        import json
-        if response_text.strip().startswith('[') or response_text.strip().startswith('{'):
-            return json.loads(response_text)
+        match = re.search(r'(\[.*\]|\{.*\})', response_text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
     except json.JSONDecodeError:
         pass
     
-    # Jika bukan JSON, parse manual
+    # Jika bukan JSON, parse manual (backup)
     groups = []
     lines = response_text.split('\n')
     current_group = None
@@ -148,26 +155,22 @@ def parse_groq_response(response_text):
         if not line:
             continue
             
-        # Detect group headers (numbered or bulleted)
-        if line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.')) or \
+        # Detect group headers
+        if line.startswith(('1.', '2.', '3.', '4.', '5.')) or \
            line.startswith(('**', '#')) or \
            (line.isupper() and len(line.split()) <= 4):
             
             if current_group:
                 groups.append(current_group)
             
-            group_name = line.replace('*', '').replace('#', '').strip()
-            # Remove numbering
-            for i in range(1, 11):
-                group_name = group_name.replace(f'{i}.', '').strip()
-            
+            group_name = re.sub(r'^\d+\.', '', line).replace('*', '').replace('#', '').strip()
             current_group = {
                 "name": group_name,
                 "description": "Research group focusing on related topics",
                 "fields": []
             }
         
-        # Detect fields (lines starting with -, •, or similar)
+        # Detect fields
         elif line.startswith(('-', '•', '*')) and current_group:
             field = line[1:].strip()
             if field:
@@ -248,13 +251,16 @@ def create_fallback_groups(fields, field_counts, n_groups):
     
     for i in range(0, len(fields), fields_per_group):
         group_fields = fields[i:i+fields_per_group]
+        # Nama grup diambil dari field teratas di grup ini
+        main_field = group_fields[0] if group_fields else f"Group {len(groups)+1}"
         groups.append({
-            "name": f"Research Group {len(groups) + 1}",
-            "description": f"Research group containing {len(group_fields)} related fields",
+            "name": f"{main_field} & Related",
+            "description": f"Group berdasarkan bidang {main_field}, total {len(group_fields)} bidang",
             "fields": group_fields
         })
     
     return groups
+
 
 
 # ==============================
@@ -272,9 +278,6 @@ def get_top10_chart_df(df_processed):
     else:
         plt.figure(figsize=(8, 5))
         plt.barh(top_fields[::-1], [counts[field] for field in top_fields[::-1]])
-        plt.xlabel("Jumlah Publikasi")
-        plt.ylabel("Bidang Ilmu")
-        plt.title("Top 10 Bidang Ilmu (Keyword Matching)")
         plt.tight_layout()
     
     buffer = BytesIO()

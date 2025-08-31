@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Research Intelligence</title>
+  <title>Structuring Research Center</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 </head>
@@ -33,7 +33,9 @@
 
       <nav class="nav-menu">
         <a href="#" class="nav-item active" data-page="home">
-          <div class="nav-icon">🏠</div>
+          <div class="nav-icon">
+             <img src="{{ url_for('static', filename='img/home.png') }}" alt="Home" style="width: 24px; height: 24px;">
+          </div>
           Home
         </a>
         <a href="#" class="nav-item" data-page="dashboard">
@@ -72,15 +74,90 @@
         </div>
 
         <div class="content-wrapper">
-          <h1 class="main-title">Research Intelligence</h1>
+          <h1 class="main-title">Structuring Research Center</h1>
           <p class="subtitle">
-            Proses sistematis untuk mengumpulkan, menganalisis, dan
-            menginterpretasikan informasi dan data yang relevan dengan kegiatan penelitian
+            Proses sistematis untuk mengumpulkan, menganalisis, dan menginterpretasikan
+            informasi serta data yang relevan dengan kegiatan penelitian.
           </p>
           <button class="cta-button" onclick="handleGetStarted()">Get Started</button>
         </div>
       </section>
+      
+      <!-- ===== ABOUT (HALAMAN HOME) ===== -->
+      <section class="about-section home-only" id="about">
+        <div class="about-wrap">
+          <div class="about-text">
+            <h2 class="section-title">Tentang Aplikasi</h2>
+            <p class="section-subtitle">
+            Platform ini memetakan riset lewat dua lensa yang saling melengkapi: 
+            <strong>Applied (BERTopic)</strong> untuk menggali tema-tema praktis langsung 
+            dari korpus menemukan pola makna, memberi label topik yang mudah dipahami, 
+            dan merangkum keluaran yang siap dioperasionalkan serta 
+            <strong>Fundamental (Keyword Matching)</strong> untuk menautkan istilah-istilah 
+            kunci ke taksonomi baku seperti ACM/CCS, sehingga peta disiplin dan arah tren 
+            keilmuan terbaca konsisten. Kombinasi keduanya membuat hasil lebih utuh: sisi 
+            applied menajamkan peluang implementasi dan kolaborasi, sementara sisi fundamental 
+            menegaskan posisi ilmiah dan fokus jangka panjang; semuanya diringkas dalam kartu dan 
+            ringkasan yang enak dipindai untuk presentasi maupun monitoring.
+            </p>
+          </div>
 
+          <div class="about-cards">
+            <div class="mini-card">
+              <h4>BERTopic Pipeline</h4>
+              <p>Coherence → Topik & Label → Hierarki → Rekomendasi kelompok riset.</p>
+            </div>
+            <div class="mini-card">
+              <h4>ACM/CCS Trends</h4>
+              <p>Keyword → Kategori ACM/CCS → Tren topik → Rekomendasi kelompok.</p>
+            </div>
+            <div class="mini-card">
+              <h4>Exploration</h4>
+              <p>Telusuri label & grup melalui tampilan interaktif.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== GROUPS (penjelasan pipeline, tanpa tombol) ===== -->
+      <section class="groups-section home-only" id="groups">
+        <div class="groups-wrap">
+          <!-- Applied (BERTopic) -->
+          <article class="group-card group-applied">
+            <header class="group-head">
+              <div class="group-pill pill-applied">Applied Research • BERTopic</div>
+            </header>
+            <p class="group-desc">
+              Pipeline berbasis BERTopic dimulai dari uji koherensi (mis. <em>c_v</em>/<em>c_npmi</em>)
+              dan pemilihan parameter terbaik, lalu pelabelan topik (embeddings BERT + C-TF-IDF).
+              Dari label tersebut dibangun <em>hierarchy view</em> dan rekomendasi kelompok riset.
+            </p>
+            <ul class="group-list">
+              <li><span>•</span> Tuning HDBSCAN (min_cluster_size) → pilih skor koherensi terbaik.</li>
+              <li><span>•</span> Pelabelan topik: BERT embeddings + C-TF-IDF.</li>
+              <li><span>•</span> Hierarki topik & rekomendasi kelompok dari label.</li>
+              <li><span>•</span> Output: nama grup, daftar label, peta relasi topik.</li>
+            </ul>
+          </article>
+
+          <!-- Fundamental (Keyword Matching ACM/CCS) -->
+          <article class="group-card group-fundamental">
+            <header class="group-head">
+              <div class="group-pill pill-fundamental">Fundamental • Keyword Matching (ACM/CCS)</div>
+            </header>
+            <p class="group-desc">
+              Pemetaan kata kunci ke taksonomi ACM/CCS untuk membaca tren bidang ilmu.
+              Dari tren inilah disusun rekomendasi kelompok riset yang mewakili fokus dasar.
+            </p>
+            <ul class="group-list">
+              <li><span>•</span> Ekstraksi keyword → pemetaan ke kategori ACM/CCS.</li>
+              <li><span>•</span> Analisis tren topik (frekuensi/waktu) → fokus riset utama.</li>
+              <li><span>•</span> Rekomendasi kelompok berdasar konsistensi tren & kedekatan konsep.</li>
+              <li><span>•</span> Output: ringkasan fokus dasar + daftar bidang (chips).</li>
+            </ul>
+          </article>
+        </div>
+      </section>
 
       <!-- Dashboard Page -->
       <section id="dashboardPage" style="display: none;">
@@ -91,22 +168,22 @@
 
           <div class="stats-cards">
             <div class="card1">
-              <h3>150</h3>
+              <h3>3</h3>
               <p>Total Documents</p>
             </div>
             <div class="card2">
-              <h3>23</h3>
-              <p>Active Projects</p>
+              <h3>3</h3>
+              <p>Total Research Group</p>
             </div>
             <div class="card3">
-              <h3>89%</h3>
-              <p>Success Rate</p>
+              <h3>56</h3>
+              <p>Total Bidang Ilmu</p>
             </div>
           </div>
 
           <div class="charts-section">
             <div class="bar-chart">
-              <h3>Document Analysis Trends</h3>
+              <h3>Distribusi Fundamental Research Group</h3>
               <div class="bar-chart-container">
                 <div class="bars">
                   <div style="height: 60%; background: #FF6B6B; width: 30px;"></div>
@@ -118,7 +195,7 @@
               </div>
             </div>
             <div class="donut-chart">
-              <h4>Analysis Distribution</h4>
+              <h4>Distributi Researh Group</h4>
               <div class="circle">
                 <div class="inner-circle">
                   <span>Total</span>
@@ -180,44 +257,59 @@
             <p class="center-text">Silakan pilih metode analisis terlebih dahulu di menu Upload.</p>
           </div>
           <div id="analisisBertopic" class="analisis-slide">
-            <h3>Hasil Analisis BERTopic</h3>
+            <h3>Applied Research Group</h3>
 
             <!-- Plot akan dimasukkan di sini oleh JavaScript -->
-            <div id="hasilBertopic" class="plot-container">
-              <p class="placeholder">Belum ada hasil analisis.</p>
-            </div>
-
-            <!-- Parameter terbaik juga akan disisipkan secara dinamis -->
-            <div id="parameterTerbaik" class="parameter-box">
-              <p class="placeholder">Belum ada parameter ditemukan.</p>
-            </div>
-
-            <!-- Section untuk memilih cluster size dan generate topics -->
-            <div id="pilihClusterSize" style="margin-top: 20px; display: none;">
-              <div style="background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <h4 style="margin-bottom: 15px; color: #333;">Generate Topics with Labels</h4>
-                
-                <div style="margin-bottom: 15px;">
-                  <label for="minClusterInput" style="display: block; font-weight: bold; margin-bottom: 5px;">
-                    Pilih Min Cluster Size:
-                  </label>
-                  <select id="minClusterInput" style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
-                    <option value="" disabled selected>Pilih min cluster size</option>
-                  </select>
+            <div class="hasil-wrapper">
+              <div id="hasilBertopic" class="plot-container">
+                <div class="plot-slide">
+                  <!-- Plotly akan/inilah tempat grafik -->
+                  <p class="placeholder">Belum ada hasil analisis.</p>
                 </div>
+              </div>
+              <div class="right-panel">
+                <aside id="parameterTerbaik" class="parameter-container">
+                  <p class="placeholder">Belum ada parameter ditemukan.</p>
+                </aside>
 
-                <button onclick="generateTopikDenganLabel()" 
-                        style="background: #2E8B57; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold;">
-                  Generate Topics & Labels
-                </button>
+                <!-- Section untuk memilih cluster size dan generate topics -->
+                <div id="pilihClusterSize" class="generator-card" style="display: none;">
+                  <h4 class="generator-title">Generate Topics with Labels</h4>
+                  <p class="generator-subtitle">Pilih ukuran minimum cluster, lalu jalankan generator topik.</p>
+                  <div class="form-group">
+                    <label for="minClusterInput">Pilih Min Cluster Size:</label>
+                    <select id="minClusterInput">
+                      <option value="" disabled selected>Pilih min cluster size</option>
+                      <!-- Opsi akan diisi via JS -->
+                    </select>
+                    <small class="hint">Gunakan nilai yang sesuai dari grafik.</small>
+                  </div>
+                  <button class="btn-generate" onclick="generateTopikDenganLabel()">
+                    Generate Topics & Labels
+                  </button>
+                </div>
               </div>
             </div>
-
             <!-- Hasil topik dengan label -->
             <div id="hasilTopik" style="margin-top: 20px;"></div>
           </div>
+         <!-- RESEARCH GROUPS (BERTopic) -->
+          <div id="bertHierarchyAndGroups" class="rg-wrap" style="display:none;">
+            <h3 class="rg-title">Research Groups</h3>
 
+            <div class="rg-actions">
+              <button class="btn btn-blue" onclick="buildHierarchyBertDefault()">Build Hierarchy</button>
+              <button class="btn btn-green" onclick="generateResearchGroupsBert()">Generate Research Groups</button>
+            </div>
 
+            <!-- (opsional) hierarchy plot -->
+            <div id="bertHierarchyPlot" class="plot-container rg-plot"></div>
+
+            <!-- Hasil research groups -->
+            <div id="bertGroupsResult" class="rg-grid"></div>
+          </div>
+          
+          <!--ESEARCH GROUPS (Keyword Matching) -->
           <div id="analisisKeyword" class="analisis-slide">
               <div class="dashboard-container">
                   <div class="content-grid">
@@ -228,15 +320,13 @@
                               <div class="chart-container">
                                   <!-- Image untuk menampilkan chart base64 dari Flask -->
                                   <img id="topFieldsChartImg" 
-                                      alt="Top Fields Chart" 
-                                      style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;">
-                                  
+                                      alt="Top Fields Chart"
+                                      class="top-fields-chart">
+                                </div>  
                                   <!-- Fallback div untuk hasil jika diperlukan -->
-                                  <div id="hasilKeyword" style="min-height: 200px;"></div>
-                                  
+                                  <div id="hasilKeyword" ></div>
                                   <!-- Canvas lama disembunyikan karena kita pakai base64 dari backend -->
-                                  <canvas id="topFieldsChart" style="display: none;"></canvas>
-                              </div>
+                                  <canvas id="topFieldsChart" style="display: none;"></canvas>                              
                           </div>
                       </div>
 
@@ -245,7 +335,7 @@
                           <!-- Dropdown Section -->
                           <div class="dropdown-section">
                               <h3 class="section-title">Jumlah Kelompok Fundamental Research</h3>
-                              <div class="dropdown-container">
+                              <div class="dropdown-kelompok">
                                   <select class="custom-dropdown" id="clusterSelector">
                                       <option value="1">1 Kelompok</option>
                                       <option value="2">2 Kelompok</option>
@@ -269,6 +359,7 @@
                                       <p>Pilih file dan jalankan analisis keyword matching untuk melihat rekomendasi</p>
                                   </div>
                               </div>
+                              
                               <div class="fundamental-groups-list">
                                   <!-- Groups akan ditampilkan di sini -->
                               </div>

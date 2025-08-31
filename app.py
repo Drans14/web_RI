@@ -7,7 +7,7 @@ from backend.models.preprocessing import preprocess_dataframe
 from backend.models.model_bert import bertopic_analysis, generate_topics_with_label
 from backend.models.model_match import keyword_matching,group_fields_with_groq, get_top10_chart_df
 from backend.models.model_match import keyword_matching
-
+from backend.models.model_bert import build_hierarchy_figure,make_research_groups
 import base64
 from io import BytesIO
 
@@ -193,57 +193,19 @@ def generate_topics():
         # Filter topik yang valid (bukan outlier)
         valid_topics = topic_info[topic_info["Topic"] != -1][["Topic", "Name", "Count"]]
         valid_topics = valid_topics.rename(columns={"Topic": "topic", "Name": "label", "Count": "count"})
-        
-        return jsonify({
-            "topic_count": len(valid_topics),
-            "topics": valid_topics.to_dict(orient="records")
-        })
 
-    except Exception as e:
-        import traceback
-        print("Generate topics error:")
-        print(traceback.format_exc())
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
-
-
-
-
-@app.route("/generate_topics", methods=["POST"])
-def generate_topics():
-    data = request.get_json()
-    filename = data.get("filename")
-    min_cluster_size = int(data.get("min_cluster_size"))
-    
-
-    print(f"Generate topics request - File: {filename}, Min cluster: {min_cluster_size}")
-
-    if not filename or filename not in analysis_cache:
-        return jsonify({"error": "Data analisis tidak ditemukan. Silakan jalankan analisis BERTopic terlebih dahulu."}), 400
-
-    try:
-        cache = analysis_cache[filename]
-        print(f"Using cached data for {filename}")
-        
-        # Panggil fungsi generate topics dengan data yang sudah di-cache
-        result = generate_topics_with_label(
-            docs=cache["docs"],
-            embeddings=cache["embeddings"],
-            embedding_model=cache["embedding_model"],
-            umap_model=cache["umap_model"],
-            vectorizer_model=cache["vectorizer_model"],
-            ctfidf_model=cache["ctfidf_model"],
-            representation_model=cache["representation_model"],
-            min_cluster_size=min_cluster_size
-        )
-
-        if isinstance(result, dict) and "error" in result:
-            return jsonify(result), 500
-
-        topic_model, topic_info = result
-        
-        # Filter topik yang valid (bukan outlier)
-        valid_topics = topic_info[topic_info["Topic"] != -1][["Topic", "Name", "Count"]]
-        valid_topics = valid_topics.rename(columns={"Topic": "topic", "Name": "label", "Count": "count"})
+        if filename in analysis_cache:
+            analysis_cache[filename].update({
+                "topic_model": topic_model,
+                "topic_info": topic_info
+            })
+        else:
+            # fallback (harusnya tidak kejadian karena di-check di atas)
+            analysis_cache[filename] = {
+                "docs": cache.get("docs"),
+                "topic_model": topic_model,
+                "topic_info": topic_info
+            }
         
         return jsonify({
             "topic_count": len(valid_topics),
@@ -295,5 +257,143 @@ def generate_groups():
             "traceback": traceback.format_exc()
         }), 500
     
+
+@app.route("/bert_hierarchy", methods=["POST"])
+def bert_hierarchy():
+    try:
+        data = request.get_json()
+        filename = data.get("filename")
+        linkage_method = data.get("linkage_method", "ward")
+        optimal_ordering = bool(data.get("optimal_ordering", True))
+
+        if not filename or filename not in analysis_cache:
+            return jsonify({"error": "Cache tidak ditemukan. Jalankan BERTopic dulu."}), 400
+
+        cache = analysis_cache[filename]
+        topic_model = cache.get("topic_model")
+        docs = cache.get("docs")
+
+        if topic_model is None or docs is None:
+            return jsonify({"error": "Model/Docs belum tersedia. Jalankan generate topics dulu."}), 400
+
+        plot_html = build_hierarchy_figure(
+            topic_model=topic_model,
+            docs=docs,
+            linkage_method=linkage_method,
+            optimal_ordering=optimal_ordering
+        )
+        return jsonify({"plot_html": plot_html})
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+    
+    
+@app.route("/bert_research_groups", methods=["POST"])
+def bert_research_groups():
+    """
+    Bentuk kelompok riset sinkron dengan pewarnaan dendrogram.
+    Param penting di body JSON:
+      - filename (wajib)
+      - color_threshold (float, default 1.0)
+      - linkage_method ("ward"/"complete"/"average"/"single")
+      - optimal_ordering (bool)
+      - distance ("cosine"/"euclidean")
+      - use_ctfidf (bool)
+      - groq_api_key (opsional; kalau None, fallback naming)
+      - groq_model (default "llama-3.3-70b-versatile")
+      - max_name_words (int)
+    """
+    try:
+        data = request.get_json()
+        filename = data.get("filename")
+        if not filename or filename not in analysis_cache:
+            return jsonify({"error": "Cache tidak ditemukan. Jalankan BERTopic dulu."}), 400
+
+        cache = analysis_cache[filename]
+        topic_model = cache.get("topic_model")
+        if topic_model is None:
+            return jsonify({"error": "topic_model belum ada. Jalankan generate topics dulu."}), 400
+
+        groups_df, md = make_research_groups(
+            topic_model=topic_model,
+            use_ctfidf=bool(data.get("use_ctfidf", True)),
+            color_threshold=float(data.get("color_threshold", 1.0)),
+            linkage_method=data.get("linkage_method", "ward"),
+            optimal_ordering=bool(data.get("optimal_ordering", True)),
+            distance=data.get("distance", "cosine"),
+            groq_api_key=data.get("groq_api_key") or os.getenv("GROQ_API_KEY"),
+            groq_model=data.get("groq_model", "llama-3.3-70b-versatile"),
+            max_name_words=int(data.get("max_name_words", 4)),
+            topic_info_df=cache.get("topic_info"),
+            save_markdown_path=None
+        )
+
+        # simpan ke cache bila perlu
+        analysis_cache[filename]["research_groups"] = groups_df
+
+        return jsonify({
+            "group_count": int(groups_df.shape[0]),
+            "groups": groups_df.to_dict(orient="records"),
+            "markdown": md
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+@app.route('/dashboard-data', methods=['POST'])
+def dashboard_data():
+    filename = request.json.get('filename')
+    metode = request.json.get('metode')
+    result = {}
+
+    # Jumlah dokumen bersih
+    if filename in analysis_cache:
+        cache = analysis_cache[filename]
+        # Untuk BERT
+        if metode == 'bertopic':
+            docs = cache.get('docs')
+            topic_info = cache.get('topic_info')
+            research_groups = cache.get('research_groups')
+            result['clean_docs_count'] = len(docs) if docs is not None else 0
+            result['research_group_count'] = research_groups.shape[0] if research_groups is not None else 0
+            # Chart data: nama group dan jumlah anggota
+            if research_groups is not None:
+                chart_data = []
+                total_team = research_groups['team_count'].sum() if 'team_count' in research_groups.columns else 0
+                for _, row in research_groups.iterrows():
+                    percent = (row['team_count'] / total_team * 100) if total_team else 0
+                    chart_data.append({
+                        'group': row['group_name'] if 'group_name' in row else row.get('name', ''),
+                        'team_count': row['team_count'] if 'team_count' in row else row.get('count', 0),
+                        'percentage': percent
+                    })
+                result['chart_data'] = chart_data
+            else:
+                result['chart_data'] = []
+        # Untuk Matching Keyword
+        elif metode == 'keyword':
+            hasil_df = cache.get('hasil_df')
+            grouped = group_fields_with_groq(hasil_df, 5) if hasil_df is not None else []
+            result['clean_docs_count'] = len(hasil_df) if hasil_df is not None else 0
+            result['research_group_count'] = len(grouped)
+            chart_data = []
+            total_team = sum([g['count'] for g in grouped]) if grouped else 0
+            for g in grouped:
+                percent = (g['count'] / total_team * 100) if total_team else 0
+                chart_data.append({
+                    'group': g['name'],
+                    'team_count': g['count'],
+                    'percentage': percent
+                })
+            result['chart_data'] = chart_data
+    else:
+        result = {
+            'clean_docs_count': 0,
+            'research_group_count': 0,
+            'chart_data': []
+        }
+    return jsonify(result)
+    
+
 if __name__ == '__main__':
     app.run(debug=False)
